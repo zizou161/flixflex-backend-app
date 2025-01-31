@@ -1,0 +1,39 @@
+# Stage 1: Build the Spring Boot application
+FROM maven:3.8.5-openjdk-17-slim AS builder
+
+WORKDIR /app
+
+COPY pom.xml .
+COPY src ./src
+
+RUN mvn clean package -DskipTests
+
+# Stage 2: Create a custom JRE using jlink for minimal size
+FROM eclipse-temurin:17-jdk-alpine AS jre-builder
+
+RUN jlink --no-header-files --no-man-pages --compress=2 --strip-debug --add-modules java.base,java.sql,java.naming,java.desktop,java.management,java.security.jgss,java.instrument --output /custom-jre
+
+# Stage 3: Create the final image using Distroless
+FROM gcr.io/distroless/java-debian11:17-nonroot
+
+COPY --from=jre-builder /custom-jre /opt/jre
+
+COPY --from=builder /app/target/*.jar /app/app.jar
+
+ENV JAVA_OPTS="-XX:+UseContainerSupport -XX:MaxRAMPercentage=90.0 -Dspring.profiles.active=prod"
+
+ENTRYPOINT ["/opt/jre/bin/java", "-jar", "/app/app.jar"]
+
+# .dockerignore recommendations:
+# .git
+# .gitignore
+# .mvn
+# .idea
+# target/
+# Dockerfile
+# docker-compose.yml
+# *.log
+# *.iml
+# *.class
+# *.DS_Store
+# node_modules/

@@ -1,0 +1,43 @@
+# Stage 1: Build the Spring Boot application
+FROM maven:3.8.6 AS build
+
+WORKDIR /app
+
+COPY pom.xml .
+COPY src ./src
+
+RUN mvn clean package -DskipTests
+
+# Stage 2: Create the minimal runtime image using OpenJDK 17 on Alpine
+FROM openjdk:17-alpine as runtime
+
+# Install dependencies for OpenJDK and security updates
+RUN apk update && apk add --no-cache \
+    bash \
+    libcurl \
+    && rm -rf /var/cache/apk/*
+
+# Create a non-root user
+RUN addgroup -S spring && adduser -S spring -G spring
+
+# Set working directory
+WORKDIR /app
+
+# Copy the Spring Boot JAR from the build stage
+COPY --from=build /app/target/*.jar app.jar
+
+# Expose application port
+EXPOSE 8080
+
+# Run the application as a non-root user
+USER spring
+
+ENTRYPOINT ["java", "-jar", "app.jar"]
+
+# .dockerignore
+# target/
+# .mvn/
+# .git/
+# .idea/
+# *.iml
+# *.md

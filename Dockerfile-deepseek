@@ -1,12 +1,14 @@
 # Build stage
-FROM eclipse-temurin:17-jdk-alpine as builder
+FROM maven:3.8.6-eclipse-temurin-17-alpine as builder
 WORKDIR /app
-COPY . .
-RUN ./gradlew build --no-daemon && \
-    java -Djarmode=layertools -jar build/libs/*.jar extract --destination layers
+COPY pom.xml .
+RUN mvn dependency:go-offline -B
+COPY src ./src
+RUN mvn package -DskipTests && \
+    java -Djarmode=layertools -jar target/*.jar extract --destination layers
 
 # Runtime stage
 FROM gcr.io/distroless/java17-debian11:nonroot
 WORKDIR /app
-COPY --from=builder /app/layers/ ./
+COPY --from=builder --chown=nonroot:nonroot /app/layers/ ./
 ENTRYPOINT ["java", "-XX:+UseSerialGC", "-XX:MaxRAMPercentage=75", "-Xss512k", "-Djava.security.egd=file:/dev/./urandom", "org.springframework.boot.loader.JarLauncher"]

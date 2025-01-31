@@ -13,12 +13,18 @@ FROM eclipse-temurin:17-jdk-alpine AS jre-builder
 
 RUN jlink --no-header-files --no-man-pages --compress=2 --strip-debug --add-modules java.base,java.sql,java.naming,java.desktop,java.management,java.security.jgss,java.instrument --output /custom-jre
 
-# Stage 3: Create the final image using Distroless
-FROM gcr.io/distroless/java-debian11:17-nonroot
+# Stage 3: Create the final image using a minimal base image with non-root user
+FROM eclipse-temurin:17-jre-alpine
 
 COPY --from=jre-builder /custom-jre /opt/jre
 
 COPY --from=builder /app/target/*.jar /app/app.jar
+
+# Ensure we are running as a non-root user
+RUN addgroup --system appuser && adduser --system --ingroup appuser appuser \
+    && chown -R appuser:appuser /app /opt/jre
+
+USER appuser
 
 ENV JAVA_OPTS="-XX:+UseContainerSupport -XX:MaxRAMPercentage=90.0 -Dspring.profiles.active=prod"
 
